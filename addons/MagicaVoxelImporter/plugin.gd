@@ -43,18 +43,8 @@ class ImportPlugin extends EditorImportPlugin:
 	func get_visible_name():
 		return "MagicaVoxels"
 	
-	var Sheet
-	var SheetToScene
 	var dialog
 	var _base_control
-	
-	
-	func _warning( text ):
-		_message( "MagicaVoxel import warning", text )
-	
-	func _error( text ):
-		_message( "MagicaVoxel import error", str(text))
-		open_dialog()
 	
 	func _message( title, text ):
 		var msg_dialog = AcceptDialog.new()
@@ -81,14 +71,14 @@ class ImportPlugin extends EditorImportPlugin:
 	
 	func import_dialog( target_path ):
 		if !_is_dialog_init(): _init_dialog()
-		var json_path = null
+		var vox_path = null
 		if typeof(target_path) == TYPE_STRING and not target_path.empty():
 			var old_import_meta = ResourceLoader.load_import_metadata( target_path )
 			if old_import_meta:
 				assert( old_import_meta.get_source_count() == 1 )
 				var path = old_import_meta.get_source_path( 0 )
-				json_path = expand_source_path( path )
-		dialog.setup( json_path, target_path )
+				vox_path = expand_source_path( path )
+		dialog.setup( vox_path, target_path )
 		open_dialog()
 	
 	func _on_dialog_confirm_import( source_path, target_path ):
@@ -116,7 +106,7 @@ class ImportPlugin extends EditorImportPlugin:
 		vox_path = expand_source_path( source_path )
 		
 		if vox_path == null:
-			_error( "missing voxel file" )
+			print( "missing voxel file" )
 			return
 		
 		if typeof(target_path) != TYPE_STRING or target_path.empty():
@@ -244,14 +234,13 @@ class ImportPlugin extends EditorImportPlugin:
 		var mesh
 		
 		if file.file_exists(target_path) and false:
-			print("LOOOOOOOOOOOOOL")
 			var old_mesh = ResourceLoader.load(target_path)
 			old_mesh.surface_remove(0)
 			mesh = st.commit(old_mesh)
 		else:
 			mesh = st.commit()
 		
-		print("tp: " + target_path)
+		print("tp: " + source_path)
 		print("vp: " + vox_path)
 		#mesh.set_import_metadata(suggested_import_meta)
 		#ResourceSaver.save(target_path,mesh)
@@ -260,7 +249,9 @@ class ImportPlugin extends EditorImportPlugin:
 		res_import.add_source( validate_source_path( vox_path ), file.get_md5( vox_path ))
 		res_import.set_editor( 'MagicaVoxel-Importer' )
 		mesh.set_import_metadata( res_import )
-		error = ResourceSaver.save( target_path+"derp.msh", mesh )
+		var save_path = target_path + vox_path.substr(vox_path.find_last('/'), vox_path.find_last('.')-vox_path.find_last('/')) + '.msh'
+		print("save_p: " + save_path)
+		error = ResourceSaver.save( save_path, mesh )
 		print(error)
 	
 	#Data

@@ -4,6 +4,14 @@ extends EditorPlugin
 var importer
 var control
 
+enum dir{
+	up,
+	right,
+	down,
+	left,
+	front,
+	back
+}
 
 func _enter_tree():
 	#Add new base control
@@ -24,15 +32,10 @@ func _exit_tree():
 class MagicaVoxelData:
 	var pos = Vector3(0,0,0)
 	var color
-	func init(file, subsample):
-		if subsample:
-			pos.x = file.get_8() / 2
-			pos.z = -file.get_8() / 2
-			pos.y = file.get_8() / 2
-		else:
-			pos.x = file.get_8()
-			pos.z = -file.get_8()
-			pos.y = file.get_8()
+	func init(file):
+		pos.x = file.get_8()
+		pos.z = -file.get_8()
+		pos.y = file.get_8()
 		
 		color = file.get_8()
 
@@ -96,11 +99,11 @@ class ImportPlugin extends EditorImportPlugin:
 		var voxelArray = []
 		voxelArray.resize(0)
 		voxelArray.clear()
-		for x in range(0,64):
+		for x in range(0,128):
 			voxelArray.append([])
-			for y in range(0,64):
+			for y in range(0,128):
 				voxelArray[x].append([])
-				voxelArray[x][y].resize(64)
+				voxelArray[x][y].resize(128)
 		
 		var source_path = suggested_import_meta.get_source_path( 0 )
 		vox_path = expand_source_path( source_path )
@@ -134,7 +137,6 @@ class ImportPlugin extends EditorImportPlugin:
 			var sizex = 0
 			var sizey = 0
 			var sizez = 0
-			var subsample = false;
 			
 			while file.get_pos() < file.get_len():
 				# each chunk has an ID, size and child chunks
@@ -148,21 +150,16 @@ class ImportPlugin extends EditorImportPlugin:
 					sizey = file.get_32()
 					sizez = file.get_32()
 					 
-					if sizex > 32 or sizey > 32: subsample = true
-					 
 					file.get_buffer(chunkSize - 4 * 3)
 				elif chunkName == "XYZI":
 					# XYZI contains n voxels
 					var numVoxels = file.get_32()
-					var div
-					if subsample: div = 2
-					else: div = 1
-					 
+					
 					# each voxel has x, y, z and color index values
 					data = []
 					for i in range(0,numVoxels):
 						var mvc = MagicaVoxelData.new()
-						mvc.init(file,subsample)
+						mvc.init(file)
 						data.append(mvc)
 						voxelArray[mvc.pos.x][mvc.pos.y][mvc.pos.z] = mvc
 				elif chunkName == "RGBA":
@@ -182,9 +179,6 @@ class ImportPlugin extends EditorImportPlugin:
 			 
 			# now push the voxel data into our voxel chunk structure
 			for i in range(0,data.size()):
-				# do not store this voxel if it lies out of range of the voxel chunk (32x128x32)
-				if (data[i].pos.x > 31 or data[i].pos.y > 31 or data[i].pos.z > 127): continue;
-				
 				# use the voxColors array by default, or overrideColor if it is available
 				if colors == null:
 					data[i].color = to_rgb(voxColors[data[i].color]-1)
@@ -228,6 +222,7 @@ class ImportPlugin extends EditorImportPlugin:
 			for tri in to_draw:
 				st.add_vertex( (tri*0.5)+voxel.pos+dif)
 		st.generate_normals()
+		right
 		var material = FixedMaterial.new()
 		material.set_flag(material.FLAG_USE_COLOR_ARRAY,true)
 		st.set_material(material)
@@ -240,19 +235,12 @@ class ImportPlugin extends EditorImportPlugin:
 		else:
 			mesh = st.commit()
 		
-		print("tp: " + source_path)
-		print("vp: " + vox_path)
-		#mesh.set_import_metadata(suggested_import_meta)
-		#ResourceSaver.save(target_path,mesh)
-		
 		var res_import = ResourceImportMetadata.new()
 		res_import.add_source( validate_source_path( vox_path ), file.get_md5( vox_path ))
 		res_import.set_editor( 'MagicaVoxel-Importer' )
 		mesh.set_import_metadata( res_import )
 		var save_path = target_path + vox_path.substr(vox_path.find_last('/'), vox_path.find_last('.')-vox_path.find_last('/')) + '.msh'
-		print("save_p: " + save_path)
 		error = ResourceSaver.save( save_path, mesh )
-		print(error)
 	
 	#Data
 	var voxColors = [
@@ -341,4 +329,16 @@ class ImportPlugin extends EditorImportPlugin:
 	func onright(cube,array): return array[cube.pos.x+1][cube.pos.y][cube.pos.z]
 	func infront(cube,array): return array[cube.pos.x][cube.pos.y][cube.pos.z+1]
 	func behind(cube,array): return array[cube.pos.x][cube.pos.y][cube.pos.z-1]
+	
+	func beside(cube,direction,array):
+		var new_vec = cube.pos
+		
+		if direction == dir.top: new_vec += Vector3(0,1,0)
+		elif direction == dir.down: new_vec += Vector3(0,-1,0)
+		elif direction == dir.left: new_vec += Vector3(-1,0,0)
+		elif direction == dir.right: new_vec += Vector3(1,0,0)
+		elif direction == dir.front: new_vec += Vector3(0,0,1)
+		elif direction == dir.back: new_vec += Vector3(0,0,-1)
+		
+		if new_vec.x < 0 or new_vec.y < 0 or new_vec.z < 0: return null
 

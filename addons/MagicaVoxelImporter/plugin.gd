@@ -4,18 +4,8 @@ extends EditorPlugin
 var import_plugin
 var control
 
-enum dir{
-	up,
-	right,
-	down,
-	left,
-	front,
-	back
-}
-
 func _enter_tree():
 	#Add import plugin
-	get_resource_filesystem().connect("filesystem_changed", self, "update_resources")
 	import_plugin = ImportPlugin.new()
 	add_import_plugin(import_plugin)
 
@@ -23,12 +13,6 @@ func _exit_tree():
 	#remove plugin
 	remove_import_plugin(import_plugin)
 	import_plugin = null
-
-#I think this should show vox files when starting up godot, or such. dunno. Actually copied from vnen's TiledImporter
-#Hes smarterer than me am
-func update_resources():
-	get_resource_filesystem().disconnect("filesystem_changed", self, "update_resources")
-	get_resource_filesystem().scan()
 
 ##############################################
 #                Import Plugin               #
@@ -69,7 +53,7 @@ class ImportPlugin extends EditorImportPlugin:
 	func get_import_options(preset):
 		print(preset)
 		var options = []
-		#options.append( { "name":"filepath", "default_value":"" } )
+		#options.append( { "name":"Pack in scene", "default_value":false } )
 		#options.append( { "name":"target_path", "default_value":"" } )
 		return options
 	
@@ -82,12 +66,10 @@ class ImportPlugin extends EditorImportPlugin:
 		return "Default"
 	
 	#Gets called when pressing a file gets imported / reimported
-	#save_path seems weird atm, not using it. Seems to have some md5 checksum at the end of it? it weirds me out
 	func import( source_path, save_path, options, platforms, gen_files ):
-		print(source_path)
-		print(save_path)
-		#var full_path = save_path + "." + get_save_extension()
+		
 		var full_path = source_path.substr(0, source_path.find_last('.')) + '.' + get_save_extension()
+		print("Importing: ",source_path," as: ",full_path, "under: ", save_path)
 		
 		var vox_path
 		
@@ -135,7 +117,7 @@ class ImportPlugin extends EditorImportPlugin:
 			var sizey = 0
 			var sizez = 0
 			
-			while file.get_pos() < file.get_len():
+			while file.get_position() < file.get_len():
 				# each chunk has an ID, size and child chunks
 				var chunkId = PoolByteArray([file.get_8(),file.get_8(),file.get_8(),file.get_8()]).get_string_from_ascii() #char[] chunkId
 				var chunkSize = file.get_32()
@@ -200,7 +182,6 @@ class ImportPlugin extends EditorImportPlugin:
 		var x_dif = m_x - s_x
 		var z_dif = m_z - s_z
 		var dif = Vector3(-s_x-x_dif/2.0,0,-s_z-z_dif/2.0)
-		print(dif)
 		
 		#Create the mesh
 		var st = SurfaceTool.new()
@@ -232,13 +213,7 @@ class ImportPlugin extends EditorImportPlugin:
 			mesh = st.commit(old_mesh)
 		else:
 			mesh = st.commit()
-			#mesh.set_met
 		
-		#var res_import = ResourceImportMetadata.new()
-		#res_import.add_source( validate_source_path( vox_path ), file.get_md5( vox_path ))
-		#res_import.set_editor( 'MagicaVoxel-Importer' )
-		#mesh.set_import_metadata( res_import )
-		#var save_path = target_path + vox_path.substr(vox_path.find_last('/'), vox_path.find_last('.')-vox_path.find_last('/')) + '.msh'
 		print("save path: " + full_path)
 		error = ResourceSaver.save( full_path, mesh )
 	
@@ -329,16 +304,4 @@ class ImportPlugin extends EditorImportPlugin:
 	func onright(cube,array): return array[cube.pos.x+1][cube.pos.y][cube.pos.z]
 	func infront(cube,array): return array[cube.pos.x][cube.pos.y][cube.pos.z+1]
 	func behind(cube,array): return array[cube.pos.x][cube.pos.y][cube.pos.z-1]
-	
-	func beside(cube,direction,array):
-		var new_vec = cube.pos
-		
-		if direction == dir.top: new_vec += Vector3(0,1,0)
-		elif direction == dir.down: new_vec += Vector3(0,-1,0)
-		elif direction == dir.left: new_vec += Vector3(-1,0,0)
-		elif direction == dir.right: new_vec += Vector3(1,0,0)
-		elif direction == dir.front: new_vec += Vector3(0,0,1)
-		elif direction == dir.back: new_vec += Vector3(0,0,-1)
-		
-		if new_vec.x < 0 or new_vec.y < 0 or new_vec.z < 0: return null
 

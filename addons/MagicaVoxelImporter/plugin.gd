@@ -1,30 +1,18 @@
 tool
 extends EditorPlugin
 
-var importer
+var import_plugin
 var control
 
-enum dir{
-	up,
-	right,
-	down,
-	left,
-	front,
-	back
-}
-
 func _enter_tree():
-	#Add new base control
-	control = Control.new()
-	get_base_control().add_child( control )
 	#Add import plugin
-	importer = ImportPlugin.new(control)
-	add_import_plugin(importer)
+	import_plugin = ImportPlugin.new()
+	add_import_plugin(import_plugin)
 
 func _exit_tree():
-	#free base control and remove plugin
-	control.queue_free()
-	remove_import_plugin(importer)
+	#remove plugin
+	remove_import_plugin(import_plugin)
+	import_plugin = null
 
 ##############################################
 #                Import Plugin               #
@@ -40,58 +28,48 @@ class MagicaVoxelData:
 		color = file.get_8()
 
 class ImportPlugin extends EditorImportPlugin:
-	func get_name():
+	#The Name shown in the Plugin Menu
+	func get_importer_name():
 		return 'MagicaVoxel-Importer'
 	
+	#The Name shown under 'Import As' in the Import menu
 	func get_visible_name():
-		return "MagicaVoxels"
+		return "MagicaVoxels as Mesh"
 	
-	var dialog
-	var _base_control
+	#The File extensions that this Plugin can import. Those will then show up in the Filesystem
+	func get_recognized_extensions():
+		return ['vox']
 	
-	func _message( title, text ):
-		var msg_dialog = AcceptDialog.new()
-		msg_dialog.set_title( title )
-		msg_dialog.set_text( text )
-		msg_dialog.connect( 'popup_hide', msg_dialog, 'queue_free' )
-		_base_control.add_child( msg_dialog )
-		msg_dialog.call_deferred( 'popup_centered_minsize' )
+	#The Resource Type it creates. Im still not sure what exactly this does
+	func get_resource_type():
+		return "Mesh"
 	
-	func _init( base_control ):
-		_base_control = base_control
+	#The extenison the imported file will have
+	func get_save_extension():
+		return 'mesh'
 	
-	func _init_dialog():
-		dialog = load('res://addons/MagicaVoxelImporter/dialog.gd').new( _base_control )
-		dialog.connect( 'confirm_import', self, '_on_dialog_confirm_import' )
-		_base_control.add_child( dialog )
+	#Returns an Array or Dictionaries that declare which options exist.
+	#Those options will show up under 'Import As'
+	func get_import_options(preset):
+		print(preset)
+		var options = []
+		#options.append( { "name":"Pack in scene", "default_value":false } )
+		#options.append( { "name":"target_path", "default_value":"" } )
+		return options
 	
-	func _is_dialog_init():
-		return dialog and dialog.get_script()
+	#The Number of presets
+	func get_preset_count():
+		return 0
 	
-	func open_dialog():
-		if !_is_dialog_init(): _init_dialog()
-		dialog.popup_centered_minsize(Vector2( 400, 0 ))
+	#The Name of the preset.
+	func get_preset_name(preset):
+		return "Default"
 	
-	func import_dialog( target_path ):
-		if !_is_dialog_init(): _init_dialog()
-		var vox_path = null
-		if typeof(target_path) == TYPE_STRING and not target_path.empty():
-			var old_import_meta = ResourceLoader.load_import_metadata( target_path )
-			if old_import_meta:
-				assert( old_import_meta.get_source_count() == 1 )
-				var path = old_import_meta.get_source_path( 0 )
-				vox_path = expand_source_path( path )
-		dialog.setup( vox_path, target_path )
-		open_dialog()
-	
-	func _on_dialog_confirm_import( source_path, target_path ):
-		var res_import = ResourceImportMetadata.new()
-		res_import.add_source( validate_source_path( source_path ))
-		import( target_path, res_import )
-	
-	func import( target_path, suggested_import_meta ):
-		var source_count = suggested_import_meta.get_source_count()
-		assert( source_count == 1 )
+	#Gets called when pressing a file gets imported / reimported
+	func import( source_path, save_path, options, platforms, gen_files ):
+		
+		var full_path = source_path.substr(0, source_path.find_last('.')) + '.' + get_save_extension()
+		print("Importing: ",source_path," as: ",full_path, "under: ", save_path)
 		
 		var vox_path
 		
@@ -105,15 +83,15 @@ class ImportPlugin extends EditorImportPlugin:
 				voxelArray[x].append([])
 				voxelArray[x][y].resize(128)
 		
-		var source_path = suggested_import_meta.get_source_path( 0 )
-		vox_path = expand_source_path( source_path )
+		#vox_path = expand_source_path( source_path )
+		vox_path = source_path
 		
 		if vox_path == null:
 			print( "missing voxel file" )
 			return
 		
-		if typeof(target_path) != TYPE_STRING or target_path.empty():
-			print("Invalid target_path")
+		if typeof(save_path) != TYPE_STRING or save_path.empty():
+			print("Invalid save_path")
 		
 		var file = File.new()
 		var error = file.open( vox_path, File.READ )
@@ -128,7 +106,8 @@ class ImportPlugin extends EditorImportPlugin:
 		##################
 		var colors = null
 		var data = null
-		var magic = RawArray([file.get_8(),file.get_8(),file.get_8(),file.get_8()]).get_string_from_ascii()
+		#var derp = PoolByteArray(file.get_8()).get
+		var magic = PoolByteArray([file.get_8(),file.get_8(),file.get_8(),file.get_8()]).get_string_from_ascii()
 		
 		var version = file.get_32()
 		 
@@ -138,9 +117,9 @@ class ImportPlugin extends EditorImportPlugin:
 			var sizey = 0
 			var sizez = 0
 			
-			while file.get_pos() < file.get_len():
+			while file.get_position() < file.get_len():
 				# each chunk has an ID, size and child chunks
-				var chunkId = RawArray([file.get_8(),file.get_8(),file.get_8(),file.get_8()]).get_string_from_ascii() #char[] chunkId
+				var chunkId = PoolByteArray([file.get_8(),file.get_8(),file.get_8(),file.get_8()]).get_string_from_ascii() #char[] chunkId
 				var chunkSize = file.get_32()
 				var childChunks = file.get_32()
 				var chunkName = chunkId
@@ -184,7 +163,6 @@ class ImportPlugin extends EditorImportPlugin:
 					data[i].color = to_rgb(voxColors[data[i].color]-1)
 				else:
 					data[i].color = colors[data[i].color-1]
-		
 		file.close()
 		
 		##################
@@ -204,11 +182,10 @@ class ImportPlugin extends EditorImportPlugin:
 		var x_dif = m_x - s_x
 		var z_dif = m_z - s_z
 		var dif = Vector3(-s_x-x_dif/2.0,0,-s_z-z_dif/2.0)
-		print(dif)
 		
 		#Create the mesh
 		var st = SurfaceTool.new()
-		st.begin(VisualServer.PRIMITIVE_TRIANGLES)
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		for voxel in data:
 			var to_draw = []
 			if not above(voxel,voxelArray): to_draw += top
@@ -223,24 +200,22 @@ class ImportPlugin extends EditorImportPlugin:
 				st.add_vertex( (tri*0.5)+voxel.pos+dif)
 		st.generate_normals()
 		right
-		var material = FixedMaterial.new()
-		material.set_flag(material.FLAG_USE_COLOR_ARRAY,true)
+		var material = SpatialMaterial.new()
+		material.vertex_color_is_srgb = true
+		material.vertex_color_use_as_albedo = true
+		#material.set_flag(material.FLAG_USE_COLOR_ARRAY,true)
 		st.set_material(material)
 		var mesh
 		
-		if file.file_exists(target_path) and false:
-			var old_mesh = ResourceLoader.load(target_path)
+		if file.file_exists(save_path) and false:
+			var old_mesh = ResourceLoader.load(save_path)
 			old_mesh.surface_remove(0)
 			mesh = st.commit(old_mesh)
 		else:
 			mesh = st.commit()
 		
-		var res_import = ResourceImportMetadata.new()
-		res_import.add_source( validate_source_path( vox_path ), file.get_md5( vox_path ))
-		res_import.set_editor( 'MagicaVoxel-Importer' )
-		mesh.set_import_metadata( res_import )
-		var save_path = target_path + vox_path.substr(vox_path.find_last('/'), vox_path.find_last('.')-vox_path.find_last('/')) + '.msh'
-		error = ResourceSaver.save( save_path, mesh )
+		print("save path: " + full_path)
+		error = ResourceSaver.save( full_path, mesh )
 	
 	#Data
 	var voxColors = [
@@ -329,16 +304,4 @@ class ImportPlugin extends EditorImportPlugin:
 	func onright(cube,array): return array[cube.pos.x+1][cube.pos.y][cube.pos.z]
 	func infront(cube,array): return array[cube.pos.x][cube.pos.y][cube.pos.z+1]
 	func behind(cube,array): return array[cube.pos.x][cube.pos.y][cube.pos.z-1]
-	
-	func beside(cube,direction,array):
-		var new_vec = cube.pos
-		
-		if direction == dir.top: new_vec += Vector3(0,1,0)
-		elif direction == dir.down: new_vec += Vector3(0,-1,0)
-		elif direction == dir.left: new_vec += Vector3(-1,0,0)
-		elif direction == dir.right: new_vec += Vector3(1,0,0)
-		elif direction == dir.front: new_vec += Vector3(0,0,1)
-		elif direction == dir.back: new_vec += Vector3(0,0,-1)
-		
-		if new_vec.x < 0 or new_vec.y < 0 or new_vec.z < 0: return null
 

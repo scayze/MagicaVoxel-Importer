@@ -51,7 +51,6 @@ class ImportPlugin extends EditorImportPlugin:
 	#Returns an Array or Dictionaries that declare which options exist.
 	#Those options will show up under 'Import As'
 	func get_import_options(preset):
-		print(preset)
 		var options = []
 		#options.append( { "name":"Pack in scene", "default_value":false } )
 		#options.append( { "name":"target_path", "default_value":"" } )
@@ -67,39 +66,19 @@ class ImportPlugin extends EditorImportPlugin:
 	
 	#Gets called when pressing a file gets imported / reimported
 	func import( source_path, save_path, options, platforms, gen_files ):
-		
-		var full_path = source_path.substr(0, source_path.find_last('.')) + '.' + get_save_extension()
-		print("Importing: ",source_path," as: ",full_path, "under: ", save_path)
-		
-		var vox_path
-		
 		#Initialize and populate voxel array
 		var voxelArray = []
-		voxelArray.resize(0)
-		voxelArray.clear()
 		for x in range(0,128):
 			voxelArray.append([])
 			for y in range(0,128):
 				voxelArray[x].append([])
 				voxelArray[x][y].resize(128)
 		
-		#vox_path = expand_source_path( source_path )
-		vox_path = source_path
-		
-		if vox_path == null:
-			print( "missing voxel file" )
-			return
-		
-		if typeof(save_path) != TYPE_STRING or save_path.empty():
-			print("Invalid save_path")
-		
 		var file = File.new()
-		var error = file.open( vox_path, File.READ )
+		var error = file.open( source_path, File.READ )
 		if error != OK:
 			if file.is_open(): file.close()
-			import_dialog( null )
-			print("Error opening path" + error)
-			return
+			return error
 		
 		##################
 		#  Import Voxels #
@@ -199,7 +178,7 @@ class ImportPlugin extends EditorImportPlugin:
 			for tri in to_draw:
 				st.add_vertex( (tri*0.5)+voxel.pos+dif)
 		st.generate_normals()
-		right
+		
 		var material = SpatialMaterial.new()
 		material.vertex_color_is_srgb = true
 		material.vertex_color_use_as_albedo = true
@@ -215,8 +194,8 @@ class ImportPlugin extends EditorImportPlugin:
 		else:
 			mesh = st.commit()
 		
-		print("save path: " + full_path)
-		error = ResourceSaver.save( full_path, mesh )
+		var full_path = "%s.%s" % [save_path, get_save_extension()]
+		return ResourceSaver.save( full_path, mesh )
 	
 	#Data
 	var voxColors = [
@@ -305,4 +284,3 @@ class ImportPlugin extends EditorImportPlugin:
 	func onright(cube,array): return array[cube.pos.x+1][cube.pos.y][cube.pos.z]
 	func infront(cube,array): return array[cube.pos.x][cube.pos.y][cube.pos.z+1]
 	func behind(cube,array): return array[cube.pos.x][cube.pos.y][cube.pos.z-1]
-

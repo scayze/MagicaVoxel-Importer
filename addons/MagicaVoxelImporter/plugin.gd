@@ -203,6 +203,7 @@ class ImportPlugin extends EditorImportPlugin:
 		var material = SpatialMaterial.new()
 		material.vertex_color_is_srgb = true
 		material.vertex_color_use_as_albedo = true
+		material.roughness = 1
 		#material.set_flag(material.FLAG_USE_COLOR_ARRAY,true)
 		st.set_material(material)
 		var mesh
